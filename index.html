@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fragrantica to PDF</title>
+    <style>
+        /* Same CSS as previous version */
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 20px; }
+        .container { text-align: center; }
+        input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 4px; }
+        button { background-color: #4CAF50; color: white; padding: 14px 20px; border: none; border-radius: 4px; cursor: pointer; }
+        .status { margin-top: 20px; color: #666; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Fragrantica to PDF</h1>
+        <p>Enter Fragrantica perfume URL:</p>
+        <input type="url" id="perfumeUrl" placeholder="https://www.fragrantica.com/perfume/...">
+        <button onclick="generatePDF()">Convert to PDF</button>
+        <div class="status" id="status"></div>
+    </div>
+
+    <!-- Include required libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+    <script>
+        async function generatePDF() {
+            const url = document.getElementById('perfumeUrl').value;
+            const status = document.getElementById('status');
+            
+            if (!url.includes('fragrantica.com/perfume')) {
+                status.textContent = 'Please enter a valid Fragrantica perfume URL';
+                return;
+            }
+
+            status.textContent = 'Processing... This may take 20-30 seconds';
+
+            try {
+                // Use CORS proxy
+                const proxyUrl = 'https://api.allorigins.win/get?url=';
+                const response = await fetch(proxyUrl + encodeURIComponent(url));
+                const data = await response.json();
+                
+                // Parse HTML
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(data.contents, 'text/html');
+
+                // Remove unwanted elements
+                const removals = [
+                    '.header-wrap',
+                    '.mobile-perfume-image',
+                    '.right-sharing',
+                    '.comments-container',
+                    'footer',
+                    '.adsbygoogle'
+                ];
+                removals.forEach(selector => {
+                    doc.querySelectorAll(selector).forEach(el => el.remove());
+                });
+
+                // Create temporary container
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = doc.body.innerHTML;
+
+                // Add basic styling
+                tempDiv.style.padding = '20px';
+                tempDiv.style.maxWidth = '800px';
+                tempDiv.style.margin = '0 auto';
+                document.body.appendChild(tempDiv);
+
+                // Generate PDF
+                const element = tempDiv;
+                await html2canvas(element).then(canvas => {
+                    const imgData = canvas.toDataURL('image/png');
+                    const pdf = new jspdf.jsPDF('p', 'mm', 'a4');
+                    const imgWidth = 190;
+                    const pageHeight = 280;
+                    const imgHeight = canvas.height * imgWidth / canvas.width;
+                    let heightLeft = imgHeight;
+                    let position = 10;
+
+                    pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+                    heightLeft -= pageHeight;
+
+                    while (heightLeft >= 0) {
+                        position = heightLeft - imgHeight;
+                        pdf.addPage();
+                        pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+                        heightLeft -= pageHeight;
+                    }
+
+                    pdf.save('perfume-profile.pdf');
+                    tempDiv.remove();
+                    status.textContent = 'PDF downloaded!';
+                });
+
+            } catch (error) {
+                status.textContent = `Error: ${error.message}`;
+            }
+        }
+    </script>
+</body>
+</html>
